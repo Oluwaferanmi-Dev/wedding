@@ -1,0 +1,10 @@
+{
+  "description": "Effortlessly edit .md files by replacing names with common Nigerian Yoruba names, streamlining content localization for writers and developers.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
