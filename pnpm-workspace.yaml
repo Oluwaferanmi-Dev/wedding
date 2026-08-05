@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - better-sqlite3@13.0.3
