@@ -37,8 +37,34 @@ body {
   color: #1C1611;
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  position: relative;
+  width: 100%;
 }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #DDD4C2; border-radius: 2px; }
+
+/* QR Reader overrides to prevent video blowing out layout width */
+#qr-reader {
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+
+#qr-reader__dashboard {
+  display: none !important;
+}
+
+#qr-reader__scan_region {
+  background: transparent !important;
+}
+

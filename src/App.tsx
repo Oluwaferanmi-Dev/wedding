@@ -967,9 +967,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex justify-center">
-      <div className="w-full max-w-md relative flex flex-col" style={{ minHeight: '100dvh' }}>
-        <div className="flex-1 overflow-hidden" style={{ paddingBottom: '64px' }}>
+    <div className="min-h-screen bg-[#FAF7F2] flex justify-center overflow-x-hidden">
+      <div className="w-full max-w-md relative flex flex-col overflow-x-hidden" style={{ minHeight: '100dvh' }}>
+        <div className="flex-1 overflow-x-hidden overflow-y-hidden" style={{ paddingBottom: '64px' }}>
           <div className="h-full overflow-y-auto">
             {screen === 'scanner' && (
               <ScannerScreen onScanResult={handleScanResult} onManualSearch={() => setScreen('manual-search')} />
