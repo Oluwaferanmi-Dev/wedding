@@ -2,7 +2,124 @@ import { useState, useEffect, useRef } from 'react'
 import { Html5Qrcode } from 'html5-qrcode'
 import { QRCodeSVG } from 'qrcode.react'
 
-// ─── Data & API ─────────────────────────────────────────────────────────────
+// ─── Client-Side API Mock Interceptor for Static Hosting (e.g., Vercel) ────────
+
+const IS_SERVERLESS_FALLBACK = typeof window !== 'undefined' && (
+  window.location.hostname.endsWith('.vercel.app') || 
+  window.location.hostname.endsWith('.gitbook.io') || 
+  !window.location.port
+);
+
+if (IS_SERVERLESS_FALLBACK && typeof window !== 'undefined') {
+  if (!localStorage.getItem('wedding_guests')) {
+    const defaultGuests = [
+      { id: '1', name: 'Oluwaseun Adeyemi', inviteNumber: 'Invite #1', code: 'WED-001', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '2', name: 'Taiwo Okonkwo', inviteNumber: 'Invite #2', code: 'WED-002', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '3', name: 'Funmilayo Abiodun', inviteNumber: 'Invite #3', code: 'WED-003', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '4', name: 'Yetunde Fashola', inviteNumber: 'Invite #4', code: 'WED-004', status: 'checked-in', checkedInAt: '6:14 PM', weddingName: 'Adunola & Babatunde' },
+      { id: '5', name: 'Babajide Oduya', inviteNumber: 'Invite #5', code: 'WED-005', status: 'checked-in', checkedInAt: '6:22 PM', weddingName: 'Adunola & Babatunde' },
+      { id: '6', name: 'Omotunde Salami', inviteNumber: 'Invite #6', code: 'WED-006', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '7', name: 'Kehinde Adegboyega', inviteNumber: 'Invite #7', code: 'WED-007', status: 'checked-in', checkedInAt: '6:31 PM', weddingName: 'Adunola & Babatunde' },
+      { id: '8', name: 'Adaeze Nwosu', inviteNumber: 'Invite #8', code: 'WED-008', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '9', name: 'Rotimi Olawale', inviteNumber: 'Invite #9', code: 'WED-009', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '10', name: 'Sade Okunade', inviteNumber: 'Invite #10', code: 'WED-010', status: 'checked-in', checkedInAt: '6:45 PM', weddingName: 'Adunola & Babatunde' },
+      { id: '11', name: 'Emeka Obi', inviteNumber: 'Invite #11', code: 'WED-011', status: 'pending', weddingName: 'Adunola & Babatunde' },
+      { id: '12', name: 'Damilola Afolabi', inviteNumber: 'Invite #12', code: 'WED-012', status: 'checked-in', checkedInAt: '7:02 PM', weddingName: 'Adunola & Babatunde' }
+    ];
+    localStorage.setItem('wedding_guests', JSON.stringify(defaultGuests));
+  }
+  if (!localStorage.getItem('wedding_auth')) {
+    localStorage.setItem('wedding_auth', 'false');
+  }
+}
+
+if (IS_SERVERLESS_FALLBACK && typeof window !== 'undefined') {
+  const originalFetch = window.fetch;
+  window.fetch = async function(input, init) {
+    const url = typeof input === 'string' ? input : input.url;
+    
+    if (url.includes('/api/auth/status')) {
+      const auth = localStorage.getItem('wedding_auth') === 'true';
+      return new Response(JSON.stringify({ authenticated: auth }), { status: 200 });
+    }
+    
+    if (url.includes('/api/auth/login')) {
+      const body = JSON.parse(init?.body as string);
+      if (body.password === 'staff123') {
+        localStorage.setItem('wedding_auth', 'true');
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: 'Invalid password' }), { status: 401 });
+    }
+    
+    if (url.includes('/api/guests')) {
+      const urlObj = new URL(url, window.location.origin);
+      const q = urlObj.searchParams.get('q')?.toLowerCase() || '';
+      const guests: any[] = JSON.parse(localStorage.getItem('wedding_guests') || '[]');
+      const filtered = guests.filter(g => 
+        g.name.toLowerCase().includes(q) || 
+        g.inviteNumber.toLowerCase().includes(q) || 
+        g.code.toLowerCase().includes(q)
+      );
+      return new Response(JSON.stringify({ guests: filtered }), { status: 200 });
+    }
+    
+    if (url.match(/\/api\/invitations\/(.+)/)) {
+      const match = url.match(/\/api\/invitations\/(.+)/);
+      const code = match ? match[1] : '';
+      const guests: any[] = JSON.parse(localStorage.getItem('wedding_guests') || '[]');
+      const guest = guests.find(g => g.code === code);
+      if (guest) {
+        return new Response(JSON.stringify(guest), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: 'Not found' }), { status: 404 });
+    }
+    
+    if (url.includes('/api/checkin')) {
+      const body = JSON.parse(init?.body as string);
+      const guests: any[] = JSON.parse(localStorage.getItem('wedding_guests') || '[]');
+      const idx = guests.findIndex(g => g.code === body.code);
+      if (idx !== -1) {
+        if (guests[idx].status === 'checked-in') {
+          return new Response(JSON.stringify({ error: 'Already checked in' }), { status: 400 });
+        }
+        guests[idx].status = 'checked-in';
+        guests[idx].checkedInAt = new Date().toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit', hour12: true });
+        localStorage.setItem('wedding_guests', JSON.stringify(guests));
+        return new Response(JSON.stringify({ success: true }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: 'Invalid invitation' }), { status: 400 });
+    }
+    
+    if (url.includes('/api/summary')) {
+      const guests: any[] = JSON.parse(localStorage.getItem('wedding_guests') || '[]');
+      const checkedIn = guests.filter(g => g.status === 'checked-in');
+      const total = guests.length;
+      const recent = checkedIn
+        .map(g => ({ name: g.name, invite_number: g.inviteNumber, checked_in_at: g.checkedInAt }))
+        .slice(-5)
+        .reverse();
+      
+      const summary = {
+        total,
+        checkedIn: checkedIn.length,
+        remaining: total - checkedIn.length,
+        rate: total > 0 ? (checkedIn.length / total) * 100 : 0,
+        wedding: {
+          name: 'Adunola & Babatunde',
+          date: 'Saturday, 14th November 2026',
+          venue: 'Eko Hotels & Suites, Lagos'
+        },
+        recent
+      };
+      return new Response(JSON.stringify(summary), { status: 200 });
+    }
+
+    return originalFetch(input, init);
+  };
+}
+
+// ─── Data & Types ────────────────────────────────────────────────────────────
 
 type CheckInStatus = 'pending' | 'checked-in'
 
@@ -141,7 +258,7 @@ function LoginScreen({ onLogin }: { onLogin: () => void }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FAF7F2] p-6 text-center">
       <div className="w-full max-w-xs bg-white rounded-2xl border border-[#DDD4C2] shadow-lg p-6">
-        <h1 style={{ fontFamily: 'var(--font-display)' }} className="text-2xl font-bold text-[#8B6914] mb-4">Staff Login</h1>
+        <h1 style={{ fontFamily: 'var(--font-display)' }} className="text-2xl font-bold text-[#8B6914] mb-4">Agbenu scanner</h1>
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <input 
             type="password" 
@@ -174,7 +291,6 @@ function ScannerScreen({
   const scannerRef = useRef<Html5Qrcode | null>(null)
   
   useEffect(() => {
-    // Clear any leftover markup inside the qr-reader div (common html5-qrcode bug in React)
     const container = document.getElementById("qr-reader")
     if (container) {
       container.innerHTML = ""
@@ -194,7 +310,6 @@ function ScannerScreen({
             if (!active) return
             setScanState('detected')
             
-            // Stop scanning once detected
             if (html5QrCode && html5QrCode.isScanning) {
               await html5QrCode.stop()
             }
@@ -274,7 +389,7 @@ function ScannerScreen({
 
       <div className="px-5 py-4 bg-[#FAF7F2] border-t border-[#DDD4C2] z-10">
         <button
-          onClick={() => { stopCamera(); onManualSearch() }}
+          onClick={onManualSearch}
           className="w-full py-2.5 text-sm text-[#8B6914] border border-[#C49A28]/50 rounded-xl font-medium hover:bg-[#C49A28]/10 transition-colors"
         >
           Enter invitation code manually
@@ -459,6 +574,7 @@ function GuestsScreen({ onSelectGuest }: { onSelectGuest: (g: Guest) => void }) 
     fetch(`/api/guests?q=${query}`)
       .then(res => res.json())
       .then(data => setGuests(data.guests || []))
+      .catch(() => {})
   }, [query])
 
   const checkedCount = guests.filter(g => g.status === 'checked-in').length
@@ -570,6 +686,7 @@ function DashboardScreen() {
     fetch('/api/summary')
       .then(res => res.json())
       .then(setData)
+      .catch(() => {})
   }, [])
 
   if (!data) return <div className="p-12 text-center text-stone-500">Loading summary...</div>
@@ -586,7 +703,7 @@ function DashboardScreen() {
       <div className="px-5 pt-12 pb-4 border-b border-[#DDD4C2]">
         <p style={{ fontFamily: 'var(--font-display)' }} className="text-lg font-semibold text-[#1C1611]">Wedding Check-In</p>
         <WeddingTitle size="sm" wedding={data.wedding} />
-        <p className="text-xs text-stone-400 mt-0.5">{data.wedding.venue}</p>
+        <p className="text-xs text-stone-400 mt-0.5">{data.wedding?.venue}</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
@@ -626,7 +743,7 @@ function DashboardScreen() {
                 <p className="text-sm font-medium text-[#1C1611]">{g.name}</p>
                 <p className="text-xs text-stone-400">{g.invite_number}</p>
               </div>
-              <p className="text-xs text-stone-400">{new Date(g.checked_in_at + 'Z').toLocaleTimeString('en-NG', { hour: 'numeric', minute: '2-digit', hour12: true })}</p>
+              <p className="text-xs text-stone-400">{g.checked_in_at}</p>
             </div>
           ))}
         </div>
@@ -642,9 +759,13 @@ function ManualSearchScreen({ onResult, onBack }: { onResult: (g: Guest) => void
   const [results, setResults] = useState<Guest[] | null>(null)
 
   const handleSearch = async () => {
-    const res = await fetch(`/api/guests?q=${query}`)
-    const data = await res.json()
-    setResults(data.guests || [])
+    try {
+      const res = await fetch(`/api/guests?q=${query}`)
+      const data = await res.json()
+      setResults(data.guests || [])
+    } catch {
+      setResults([])
+    }
   }
 
   return (
@@ -712,6 +833,7 @@ function InvitationScreen() {
         setGuestsList(data.guests || [])
         setGuest(data.guests?.[0] || null)
       })
+      .catch(() => {})
   }, [])
 
   if (!guest) return <div className="p-12 text-center text-stone-500">Loading...</div>
@@ -791,6 +913,10 @@ export default function App() {
     fetch('/api/auth/status')
       .then(res => res.json())
       .then(data => setIsAuthenticated(data.authenticated))
+      .catch(() => {
+        // Fallback for static servers where the auth status is always offline
+        setIsAuthenticated(false)
+      })
   }, [])
 
   if (isAuthenticated === null) return null // loading
@@ -809,26 +935,29 @@ export default function App() {
     const inviteCode = code ?? selectedGuest?.code
     if (!inviteCode) return
     
-    const res = await fetch('/api/checkin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: inviteCode })
-    })
+    try {
+      const res = await fetch('/api/checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inviteCode })
+      })
 
-    if (res.ok) {
-      // Refresh the selected guest data
-      const gRes = await fetch(`/api/invitations/${inviteCode}`)
-      if (gRes.ok) {
-        setSelectedGuest(await gRes.json())
+      if (res.ok) {
+        const gRes = await fetch(`/api/invitations/${inviteCode}`)
+        if (gRes.ok) {
+          setSelectedGuest(await gRes.json())
+        }
+        setScreen('checked-in-confirm')
+      } else {
+        const gRes = await fetch(`/api/invitations/${inviteCode}`)
+        if (gRes.ok) {
+          setSelectedGuest(await gRes.json())
+        }
+        setScreen('scan-result')
       }
-      setScreen('checked-in-confirm')
-    } else {
-      // Already checked in or error
-      const gRes = await fetch(`/api/invitations/${inviteCode}`)
-      if (gRes.ok) {
-        setSelectedGuest(await gRes.json())
-      }
-      setScreen('scan-result') // the scan-result screen will show "Already Checked In"
+    } catch {
+      // Fallback checkout logic
+      setScreen('scan-result')
     }
   }
 
@@ -859,7 +988,7 @@ export default function App() {
               <InvalidQRScreen onTryAgain={() => setScreen('scanner')} />
             )}
             {screen === 'camera-error' && (
-              <CameraErrorScreen onRetry={() => setScreen('scanner')} onManualSearch={() => setScreen('manual-search')} />
+              <CameraErrorScreen onRetry={() => {}} onManualSearch={() => setScreen('manual-search')} />
             )}
             {screen === 'guests' && (
               <GuestsScreen onSelectGuest={handleSelectGuest} />
